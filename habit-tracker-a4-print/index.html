@@ -1,0 +1,574 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="UTF-8" />
+		<title>365 Yearly Habit Tracker</title>
+		<link
+			href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400&family=Montserrat:wght@200;300;400&display=swap"
+			rel="stylesheet"
+		/>
+		<style>
+			* {
+				margin: 0;
+				padding: 0;
+				box-sizing: border-box;
+			}
+
+			body {
+				background: #ddd9d4;
+				display: flex;
+				flex-direction: column;
+				justify-content: center;
+				align-items: center;
+				min-height: 100vh;
+				font-family: "Montserrat", sans-serif;
+				gap: 12px;
+				padding: 20px;
+			}
+
+			.toolbar {
+				display: flex;
+				align-items: center;
+				gap: 10px;
+				background: #fff;
+				padding: 8px 16px;
+				border-radius: 8px;
+				box-shadow: 0 2px 12px rgba(0, 0, 0, 0.12);
+				font-size: 11px;
+				color: #555;
+				letter-spacing: 1px;
+				text-transform: uppercase;
+			}
+			.toolbar input[type="text"] {
+				border: none;
+				border-bottom: 1px solid #ccc;
+				outline: none;
+				font-family: "Montserrat", sans-serif;
+				font-size: 11px;
+				color: #222;
+				padding: 2px 4px;
+				width: 220px;
+				letter-spacing: 1px;
+			}
+			.toolbar button {
+				background: #1a1a1a;
+				color: #fff;
+				border: none;
+				padding: 5px 14px;
+				border-radius: 4px;
+				font-family: "Montserrat", sans-serif;
+				font-size: 10px;
+				letter-spacing: 1.5px;
+				text-transform: uppercase;
+				cursor: pointer;
+			}
+			.toolbar button:hover {
+				background: #444;
+			}
+			.toolbar button.danger {
+				background: #c0392b;
+			}
+			.toolbar button.danger:hover {
+				background: #e74c3c;
+			}
+			.sep {
+				color: #ccc;
+			}
+
+			/* ── A4 Landscape: exactly 297mm × 210mm ── */
+			.page {
+				width: 297mm;
+				height: 210mm;
+				background: #fafaf8;
+				display: flex;
+				flex-direction: column;
+				box-shadow: 0 4px 40px rgba(0, 0, 0, 0.18);
+				overflow: hidden;
+				padding: 6mm 8mm 5mm;
+			}
+
+			/* Header */
+			.header {
+				display: flex;
+				align-items: center;
+				gap: 10mm;
+				flex-shrink: 0;
+				margin-bottom: 16px;
+			}
+			.big-number {
+				font-family: "Cormorant Garamond", serif;
+				font-size: 46pt;
+				font-weight: bold;
+				font-weight: 300;
+				line-height: 1;
+				color: #1a1a1a;
+				flex-shrink: 0;
+				margin-bottom: 1rem;
+			}
+			.title-block {
+				display: flex;
+				flex-direction: column;
+				flex-shrink: 0;
+			}
+			.title-sub {
+				font-size: 12pt;
+				letter-spacing: 3px;
+				text-transform: uppercase;
+				color: #aaa;
+				font-weight: 300;
+			}
+			.title-main {
+				font-size: 16pt;
+				letter-spacing: 5px;
+				text-transform: uppercase;
+				color: #1a1a1a;
+				font-weight: 300;
+				margin-top: 0.8mm;
+			}
+
+			.divider-v {
+				width: 0.5px;
+				height: 9mm;
+				background: #ccc;
+				flex-shrink: 0;
+				margin: 0 2mm;
+			}
+
+			.custom-title {
+				font-family: "Cormorant Garamond", serif;
+				font-size: 24pt;
+				font-weight: 300;
+				color: #2a2a2a;
+				font-style: italic;
+				letter-spacing: 1px;
+				border: none;
+				border-bottom: 1px dashed #ccc;
+				outline: none;
+				background: transparent;
+				min-width: 30mm;
+				padding: 1mm 2mm;
+				flex-shrink: 1;
+			}
+			.custom-title:empty::before {
+				content: attr(data-placeholder);
+				color: #ccc;
+				font-style: italic;
+			}
+
+			.year-tag {
+				margin-left: auto;
+				font-family: "Cormorant Garamond", serif;
+				font-size: 24pt;
+				font-weight: 300;
+				color: #bbb;
+				letter-spacing: 2px;
+				flex-shrink: 0;
+			}
+
+			.divider-h {
+				width: 100%;
+				height: 0.8px;
+				background: #333;
+				flex-shrink: 0;
+				margin-bottom: 2.5mm;
+			}
+
+			/* ── Grid area ── */
+			/*
+    Page inner height = 210mm - 6mm top - 5mm bottom = 199mm
+    Header ~14mm + divider ~1mm + footer ~6mm = ~21mm overhead
+    Grid area gets ~178mm → 12 rows + 11 gaps
+    Each row height = (178mm - 11×2px) / 12 ≈ 14.6mm
+    Box width (square) = row height ≈ 14.6mm
+    31 boxes + 30 gaps(2px) + month label(10mm) must fit in 281mm (297-8-8)
+    31 × 14.6mm + 30×2px + 10mm = 452mm + 60px + 10mm → WAY too wide
+
+    Solution: Don't enforce square via CSS. Let the grid be a fixed-height
+    row, and use width = height via JS after layout, OR just make boxes
+    fill the row height and set width = height using a known calculation.
+
+    Easier: use a fixed px grid that we KNOW fits.
+    Available width inside page: 297mm - 8mm - 8mm = 281mm = ~1063px (at 96dpi... but mm on screen varies)
+    
+    Best approach: use CSS only. 
+    - grid-area flex:1, each row flex:1 → each row has a known fraction of height
+    - boxes: height = 100% of row, width = height (square) via padding-bottom trick won't work in flex
+    - Use: width = calc((100% - 10mm - 30*2px) / 31) and height = 100%
+      This makes boxes rectangular, not square, but they'll FIT.
+    
+    Actually the simplest correct approach:
+    - Give the grid a fixed pixel size computed to fit, using vw/vh won't work for mm pages.
+    - Use a CSS custom property set the box size to the row height.
+    
+    REAL fix: compute box size in JS based on actual rendered row height, set width=height.
+  */
+			.grid-area {
+				min-height: 0;
+				display: flex;
+				flex-direction: column;
+				gap: 6px;
+			}
+
+			.month-row {
+				min-height: 0;
+				display: flex;
+				align-items: center;
+				gap: 0;
+			}
+
+			.month-name {
+				width: 10mm;
+				flex-shrink: 0;
+				display: flex;
+				align-items: center;
+				justify-content: flex-end;
+				padding-right: 1.5mm;
+				font-family: "Montserrat", sans-serif;
+				font-size: 8pt;
+				letter-spacing: 1.5px;
+				text-transform: uppercase;
+				color: #333;
+				font-weight: 400;
+			}
+
+			.days {
+				flex: 1;
+				min-width: 0;
+				height: 100%;
+				display: flex;
+				align-items: center;
+				gap: 2px;
+			}
+
+			.box {
+				width: 31px;
+				height: 31px;
+				flex-shrink: 0;
+				border: 1.5px solid #333;
+				display: flex;
+				align-items: center;
+				justify-content: center;
+				font-family: "Montserrat", sans-serif;
+				font-weight: 400;
+				color: #333;
+				cursor: pointer;
+				background: #fff;
+				user-select: none;
+				border-radius: 1px;
+				transition:
+					background 0.1s,
+					border-color 0.1s;
+				position: relative;
+				/* width & height set by JS to be square and fit */
+			}
+			.box:hover {
+				background: #e0dbd4;
+				border-color: #111;
+			}
+			.box.checked {
+				background: #1a1a1a;
+				border-color: #1a1a1a;
+				color: transparent;
+			}
+			.box.checked::after {
+				content: "";
+				position: absolute;
+				width: 28%;
+				height: 46%;
+				border-right: 1.5px solid #fafaf8;
+				border-bottom: 1.5px solid #fafaf8;
+				transform: rotate(40deg) translateY(-10%);
+			}
+
+			.box-inactive {
+				flex-shrink: 0;
+				border: none;
+				background: transparent;
+				visibility: hidden;
+				pointer-events: none;
+			}
+
+			.footer {
+				flex-shrink: 0;
+				margin-top: 2.5mm;
+				text-align: center;
+			}
+			.quote {
+				font-size: 3.6pt;
+				letter-spacing: 1.5px;
+				text-transform: uppercase;
+				color: #bbb;
+				font-weight: 300;
+				line-height: 2;
+			}
+			/* ── Bottom section ── */
+			.bottom-section {
+				flex-shrink: 0;
+				margin-top: auto;
+				padding-top: 2.5mm;
+				border-top: 0.5px solid #ccc;
+				display: flex;
+				align-items: flex-start;
+				gap: 4mm;
+			}
+
+			.bottom-label {
+				font-family: "Montserrat", sans-serif;
+				font-size: 8pt;
+				letter-spacing: 2px;
+				text-transform: uppercase;
+				color: #aaa;
+				font-weight: 300;
+				flex-shrink: 0;
+				padding-top: 1mm;
+				white-space: nowrap;
+			}
+
+			.bottom-input {
+				flex: 1;
+				font-family: "Cormorant Garamond", serif;
+				font-size: 12pt;
+				font-weight: 300;
+				font-style: italic;
+				color: #333;
+				letter-spacing: 0.5px;
+				border: none;
+				outline: none;
+				background: transparent;
+				resize: none;
+				line-height: 1.6;
+				width: 100%;
+				overflow: hidden;
+			}
+			.bottom-input::placeholder {
+				color: #ccc;
+				font-style: italic;
+			}
+
+			@media print {
+				body {
+					background: none;
+					padding: 0;
+					margin: 0;
+				}
+				.toolbar {
+					display: none !important;
+				}
+				.page {
+					box-shadow: none;
+					margin: 0;
+					width: 297mm;
+					height: 210mm;
+				}
+				.custom-title {
+					border-bottom: none;
+				}
+				.box {
+					-webkit-print-color-adjust: exact;
+					print-color-adjust: exact;
+				}
+				@page {
+					size: A4 landscape;
+					margin: 0;
+				}
+			}
+		</style>
+	</head>
+	<body>
+		<div class="toolbar">
+			<span>Habit Title:</span>
+			<input
+				type="text"
+				id="titleInput"
+				placeholder="e.g. Daily Exercise, Read 30 min…"
+				maxlength="50"
+			/>
+			<span class="sep">|</span>
+			<button onclick="window.print()">🖨&nbsp; Print / Save PDF</button>
+			<button class="danger" onclick="resetAll()">↺ Reset All</button>
+		</div>
+
+		<div class="page" id="page">
+			<div class="header">
+				<div class="big-number">365</div>
+				<div class="title-block">
+					<div class="title-sub">— Yearly —</div>
+					<div class="title-main">Habit Tracker</div>
+				</div>
+				<div class="divider-v"></div>
+				<div
+					class="custom-title"
+					id="titleDisplay"
+					contenteditable="true"
+					spellcheck="false"
+					data-placeholder="Your Habit Here…"
+				></div>
+				<div class="year-tag">2026</div>
+			</div>
+			<div class="divider-h"></div>
+			<div class="grid-area" id="gridArea"></div>
+			<div class="bottom-section">
+				<div class="bottom-label">Notes &amp; Quotes</div>
+				<textarea
+					class="bottom-input"
+					id="bottomText"
+					rows="2"
+					placeholder="Write a quote, intention, or note here…"
+					maxlength="300"
+				></textarea>
+			</div>
+		</div>
+
+		<script>
+			const YEAR = 2026
+			const MONTH_NAMES = [
+				"January",
+				"February",
+				"March",
+				"April",
+				"May",
+				"June",
+				"July",
+				"August",
+				"September",
+				"October",
+				"November",
+				"December",
+			]
+
+			function daysInMonth(year, month) {
+				return new Date(year, month + 1, 0).getDate()
+			}
+
+			const titleDisplay = document.getElementById("titleDisplay")
+			const titleInput = document.getElementById("titleInput")
+			const gridArea = document.getElementById("gridArea")
+
+			let state = {}
+			try {
+				state = JSON.parse(localStorage.getItem("habitState2026") || "{}")
+			} catch (e) {}
+			const savedTitle = localStorage.getItem("habitTitle2026") || ""
+			if (savedTitle) {
+				titleDisplay.textContent = savedTitle
+				titleInput.value = savedTitle
+			}
+
+			titleInput.addEventListener("input", () => {
+				titleDisplay.textContent = titleInput.value
+				localStorage.setItem("habitTitle2026", titleInput.value)
+			})
+			titleDisplay.addEventListener("input", () => {
+				const v = titleDisplay.textContent
+				titleInput.value = v
+				localStorage.setItem("habitTitle2026", v)
+			})
+			titleDisplay.addEventListener("keydown", (e) => {
+				if (e.key === "Enter") {
+					e.preventDefault()
+					titleDisplay.blur()
+				}
+			})
+
+			// Build all rows first, then size boxes via JS
+			const allBoxes = [] // {el, active}
+
+			MONTH_NAMES.forEach((name, mIdx) => {
+				const days = daysInMonth(YEAR, mIdx)
+				const row = document.createElement("div")
+				row.className = "month-row"
+
+				const label = document.createElement("div")
+				label.className = "month-name"
+				label.textContent = name.slice(0, 3).toUpperCase()
+				row.appendChild(label)
+
+				const daysEl = document.createElement("div")
+				daysEl.className = "days"
+
+				for (let d = 1; d <= 31; d++) {
+					if (d <= days) {
+						const key = `${mIdx}-${d}`
+						const box = document.createElement("div")
+						box.className = "box" + (state[key] ? " checked" : "")
+						if (!state[key]) box.textContent = String(d).padStart(2, "0")
+
+						box.addEventListener("click", () => {
+							if (box.classList.contains("checked")) {
+								box.classList.remove("checked")
+								box.textContent = String(d).padStart(2, "0")
+								delete state[key]
+							} else {
+								box.classList.add("checked")
+								box.textContent = ""
+								state[key] = true
+							}
+							localStorage.setItem("habitState2026", JSON.stringify(state))
+						})
+
+						daysEl.appendChild(box)
+						allBoxes.push({ el: box, active: true })
+					} else {
+						const empty = document.createElement("div")
+						empty.className = "box-inactive"
+						daysEl.appendChild(empty)
+						allBoxes.push({ el: empty, active: false })
+					}
+				}
+
+				row.appendChild(daysEl)
+				gridArea.appendChild(row)
+			})
+
+			// After layout: compute the ideal square size for boxes
+			function sizeBoxes() {
+				const gridEl = document.getElementById("gridArea")
+				const rows = gridEl.querySelectorAll(".month-row")
+
+				if (!rows.length) return
+
+				// Get the actual rendered height of a row
+				const rowH = rows[0].getBoundingClientRect().height
+
+				// Available width for the days strip = page width - padding - month label
+				// We read it from the actual .days element
+				const daysEl = rows[0].querySelector(".days")
+				const daysW = daysEl.getBoundingClientRect().width
+
+				// Box size: limited by BOTH row height AND available width per box
+				// 31 boxes + 30 gaps of 2px each
+				const maxByWidth = (daysW - 30 * 2) / 31
+				const maxByHeight = rowH
+				const size = Math.floor(Math.min(maxByWidth, maxByHeight))
+
+				// Font size: ~55% of box size, min 1px
+				const fs = Math.max(1, Math.round(size * 0.38))
+
+				// Apply to every box and inactive slot
+				gridEl.querySelectorAll(".box, .box-inactive").forEach((el) => {
+					el.style.width = size + "px"
+					el.style.height = size + "px"
+					if (el.classList.contains("box")) {
+						el.style.fontSize = fs + "px"
+					}
+				})
+			}
+
+			// Run after fonts + layout settle
+			if (document.fonts) {
+				document.fonts.ready.then(sizeBoxes)
+			} else {
+				window.addEventListener("load", sizeBoxes)
+			}
+			window.addEventListener("resize", sizeBoxes)
+
+			function resetAll() {
+				if (confirm("Reset all checked days? This cannot be undone.")) {
+					state = {}
+					localStorage.setItem("habitState2026", "{}")
+					location.reload()
+				}
+			}
+		</script>
+	</body>
+</html>
