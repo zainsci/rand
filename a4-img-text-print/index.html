@@ -1,0 +1,819 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Diary Grid Maker</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=DM+Mono:wght@300;400&family=Lora:ital,wght@0,400;1,400;1,600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #1a1412;
+    --paper: #faf7f2;
+    --cream: #f2ede4;
+    --blush: #e8d5c4;
+    --sage: #b8c4b1;
+    --dusty: #c9bfb3;
+    --accent: #8b5e52;
+    --gold: #c9a96e;
+    --sticky1: #fef3c7;
+    --sticky2: #fce7f3;
+    --sticky3: #dbeafe;
+    --sticky4: #d1fae5;
+    --sticky5: #ede9fe;
+    --cell-size: 64mm;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--cream);
+    font-family: 'DM Mono', monospace;
+    min-height: 100vh;
+    color: var(--ink);
+  }
+
+  /* ── EDITOR UI (screen only) ── */
+  @media screen {
+    .ui-shell {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 32px 16px 60px;
+      gap: 24px;
+    }
+
+    .ui-header {
+      text-align: center;
+    }
+
+    .ui-header h1 {
+      font-family: 'Playfair Display', serif;
+      font-size: 2rem;
+      font-weight: 400;
+      letter-spacing: -0.02em;
+      color: var(--ink);
+    }
+
+    .ui-header p {
+      font-size: 0.72rem;
+      color: var(--accent);
+      margin-top: 4px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+
+    .print-btn {
+      background: var(--ink);
+      color: var(--paper);
+      border: none;
+      padding: 10px 28px;
+      font-family: 'DM Mono', monospace;
+      font-size: 0.78rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: background 0.2s, transform 0.1s;
+    }
+    .print-btn:hover { background: var(--accent); transform: translateY(-1px); }
+
+    .hint {
+      font-size: 0.68rem;
+      color: var(--dusty);
+      letter-spacing: 0.06em;
+      text-align: center;
+    }
+  }
+
+  /* ── A4 SHEET ── */
+  .a4-sheet {
+    width: 210mm;
+    height: 297mm;
+    background: white;
+    position: relative;
+    overflow: hidden;
+  }
+
+  @media screen {
+    .a4-sheet {
+      box-shadow: 0 8px 40px rgba(0,0,0,0.18), 0 2px 8px rgba(0,0,0,0.08);
+    }
+  }
+
+  /* ── GRID ── */
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    grid-template-rows: repeat(3, 1fr);
+    width: 100%;
+    height: 100%;
+    padding: 6mm;
+    gap: 3mm;
+  }
+
+  /* ── CELL ── */
+  .cell {
+    position: relative;
+    overflow: hidden;
+    border: 1px solid #e0d8d0;
+    background: var(--paper);
+    cursor: pointer;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+
+  @media screen {
+    .cell:hover {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 2px rgba(139,94,82,0.15);
+      z-index: 2;
+    }
+  }
+
+  .cell.has-content { cursor: default; }
+
+  /* ── CELL CONTENT ── */
+  .cell-image {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    display: block;
+    background: #f5f0eb;
+  }
+
+  .cell-sticky {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 6px;
+    position: relative;
+  }
+
+  .cell-sticky::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    opacity: 0.85;
+  }
+
+  .cell-sticky.s1::before { background: var(--sticky1); }
+  .cell-sticky.s2::before { background: var(--sticky2); }
+  .cell-sticky.s3::before { background: var(--sticky3); }
+  .cell-sticky.s4::before { background: var(--sticky4); }
+  .cell-sticky.s5::before { background: var(--sticky5); }
+
+  .sticky-tape {
+    position: absolute;
+    top: -2px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 18px;
+    height: 7px;
+    background: rgba(255,255,255,0.6);
+    border-radius: 1px;
+    z-index: 2;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+  }
+
+  .sticky-quote {
+    font-family: 'Lora', serif;
+    font-style: italic;
+    font-size: 0.78rem;
+    line-height: 1.5;
+    text-align: center;
+    color: #3a2e28;
+    position: relative;
+    z-index: 1;
+    padding: 4px;
+    word-break: break-word;
+  }
+
+  .sticky-quote::before {
+    content: '\201C';
+    font-size: 1rem;
+    color: rgba(0,0,0,0.18);
+    display: block;
+    line-height: 1;
+    margin-bottom: 1px;
+  }
+
+  /* ── EMPTY CELL LABEL ── */
+  .cell-empty-label {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    opacity: 0;
+    transition: opacity 0.2s;
+    pointer-events: none;
+  }
+
+  @media screen {
+    .cell:hover .cell-empty-label { opacity: 1; }
+    .cell.has-content .cell-empty-label { display: none; }
+  }
+
+  .cell-empty-label span {
+    font-size: 0.6rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--accent);
+  }
+
+  .cell-empty-label svg { opacity: 0.4; }
+
+  /* ── CELL CONTROLS (edit/remove) ── */
+  .cell-controls {
+    position: absolute;
+    top: 3px;
+    right: 3px;
+    display: flex;
+    gap: 2px;
+    z-index: 10;
+    opacity: 0;
+    transition: opacity 0.15s;
+  }
+
+  @media screen {
+    .cell.has-content:hover .cell-controls { opacity: 1; }
+  }
+
+  .cell-btn {
+    width: 18px;
+    height: 18px;
+    border: none;
+    border-radius: 2px;
+    cursor: pointer;
+    font-size: 9px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.1s;
+  }
+  .cell-btn:hover { transform: scale(1.1); }
+  .cell-btn.edit { background: var(--gold); color: white; }
+  .cell-btn.rotate { background: var(--sage); color: white; }
+  .cell-btn.remove { background: #c0392b; color: white; }
+
+  /* ── MODAL ── */
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(26,20,18,0.6);
+    backdrop-filter: blur(4px);
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.25s;
+  }
+
+  .modal-overlay.open {
+    opacity: 1;
+    pointer-events: all;
+  }
+
+  .modal {
+    background: var(--paper);
+    width: 380px;
+    padding: 28px;
+    position: relative;
+    transform: translateY(12px);
+    transition: transform 0.25s;
+    border: 1px solid var(--blush);
+  }
+
+  .modal-overlay.open .modal { transform: translateY(0); }
+
+  .modal h2 {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.2rem;
+    font-weight: 400;
+    margin-bottom: 18px;
+    color: var(--ink);
+  }
+
+  .tab-row {
+    display: flex;
+    gap: 0;
+    margin-bottom: 20px;
+    border-bottom: 1px solid var(--blush);
+  }
+
+  .tab {
+    padding: 7px 14px;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.68rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    cursor: pointer;
+    border: none;
+    background: none;
+    color: var(--dusty);
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+    transition: color 0.15s, border-color 0.15s;
+  }
+
+  .tab.active { color: var(--accent); border-color: var(--accent); }
+  .tab:hover:not(.active) { color: var(--ink); }
+
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+
+  .field-label {
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--dusty);
+    margin-bottom: 6px;
+    display: block;
+  }
+
+  .field-input {
+    width: 100%;
+    padding: 9px 10px;
+    border: 1px solid var(--blush);
+    background: white;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.78rem;
+    color: var(--ink);
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  .field-input:focus { border-color: var(--accent); }
+
+  textarea.field-input {
+    resize: vertical;
+    min-height: 80px;
+    line-height: 1.5;
+  }
+
+  .color-row {
+    display: flex;
+    gap: 7px;
+    margin-top: 10px;
+    align-items: center;
+  }
+
+  .color-swatch {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    cursor: pointer;
+    border: 2px solid transparent;
+    transition: transform 0.15s, border-color 0.15s;
+  }
+  .color-swatch:hover { transform: scale(1.15); }
+  .color-swatch.selected { border-color: var(--ink); transform: scale(1.15); }
+
+  .upload-zone {
+    border: 1.5px dashed var(--blush);
+    padding: 22px;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+    position: relative;
+  }
+  .upload-zone:hover { border-color: var(--accent); background: rgba(139,94,82,0.04); }
+  .upload-zone input[type=file] {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    cursor: pointer;
+    width: 100%;
+    height: 100%;
+  }
+
+  .upload-zone p {
+    font-size: 0.72rem;
+    color: var(--dusty);
+    letter-spacing: 0.05em;
+    pointer-events: none;
+  }
+
+  .upload-preview {
+    margin-top: 10px;
+    max-height: 80px;
+    max-width: 100%;
+    object-fit: contain;
+    display: none;
+  }
+
+  .modal-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 22px;
+  }
+
+  .btn-primary {
+    flex: 1;
+    padding: 10px;
+    background: var(--ink);
+    color: var(--paper);
+    border: none;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.72rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .btn-primary:hover { background: var(--accent); }
+
+  .btn-secondary {
+    padding: 10px 16px;
+    background: transparent;
+    color: var(--dusty);
+    border: 1px solid var(--blush);
+    font-family: 'DM Mono', monospace;
+    font-size: 0.72rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: color 0.15s, border-color 0.15s;
+  }
+  .btn-secondary:hover { color: var(--ink); border-color: var(--dusty); }
+
+  .modal-close {
+    position: absolute;
+    top: 12px;
+    right: 14px;
+    background: none;
+    border: none;
+    font-size: 1.1rem;
+    cursor: pointer;
+    color: var(--dusty);
+    line-height: 1;
+    transition: color 0.15s;
+  }
+  .modal-close:hover { color: var(--ink); }
+
+  .divider-label {
+    font-size: 0.6rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--dusty);
+    text-align: center;
+    margin: 10px 0;
+  }
+
+  /* ── PRINT STYLES ── */
+  @media print {
+    @page {
+      size: A4 portrait;
+      margin: 0;
+    }
+
+    body {
+      background: white;
+    }
+
+    .ui-shell {
+      padding: 0;
+      gap: 0;
+    }
+
+    .ui-header,
+    .print-btn,
+    .hint,
+    .cell-controls,
+    .cell-empty-label,
+    .modal-overlay {
+      display: none !important;
+    }
+
+    .a4-sheet {
+      width: 210mm;
+      height: 297mm;
+      box-shadow: none;
+      page-break-after: avoid;
+    }
+
+    .cell {
+      border: 0.3mm dashed #ccc;
+      cursor: default;
+    }
+
+    .cell:hover {
+      border-color: #ccc;
+      box-shadow: none;
+    }
+  }
+</style>
+</head>
+<body>
+
+<div class="ui-shell">
+  <div class="ui-header">
+    <h1>Diary Grid</h1>
+    <p>Click any cell to add a photo or quote</p>
+  </div>
+
+  <button class="print-btn" onclick="window.print()">✦ Print to A4</button>
+
+  <div class="a4-sheet">
+    <div class="grid" id="grid"></div>
+  </div>
+
+  <p class="hint">12 cells · 4 columns × 3 rows · Cut along dashed lines after printing</p>
+</div>
+
+<!-- Modal -->
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal()">✕</button>
+    <h2>Add to cell</h2>
+
+    <div class="tab-row">
+      <button class="tab active" onclick="switchTab('photo')">Photo</button>
+      <button class="tab" onclick="switchTab('link')">Link</button>
+      <button class="tab" onclick="switchTab('quote')">Quote</button>
+    </div>
+
+    <!-- Photo upload -->
+    <div class="tab-panel active" id="panel-photo">
+      <div class="upload-zone" id="uploadZone">
+        <input type="file" id="fileInput" accept="image/*" onchange="handleFileSelect(event)">
+        <p>Click to choose a photo<br><span style="font-size:0.6rem;opacity:0.6">JPG, PNG, GIF, WEBP</span></p>
+      </div>
+      <img id="uploadPreview" class="upload-preview" />
+    </div>
+
+    <!-- Link -->
+    <div class="tab-panel" id="panel-link">
+      <label class="field-label">Image URL</label>
+      <input type="url" id="linkInput" class="field-input" placeholder="https://example.com/photo.jpg">
+      <img id="linkPreview" class="upload-preview" style="margin-top:10px;display:none;max-height:80px;" />
+    </div>
+
+    <!-- Quote -->
+    <div class="tab-panel" id="panel-quote">
+      <label class="field-label">Your quote or text</label>
+      <textarea id="quoteInput" class="field-input" placeholder="The most beautiful things in life are not things…"></textarea>
+      <div class="color-row">
+        <span style="font-size:0.62rem;color:var(--dusty);letter-spacing:0.06em;">COLOUR</span>
+        <div class="color-swatch selected" style="background:var(--sticky1);" data-color="s1" onclick="selectColor(this)"></div>
+        <div class="color-swatch" style="background:var(--sticky2);" data-color="s2" onclick="selectColor(this)"></div>
+        <div class="color-swatch" style="background:var(--sticky3);" data-color="s3" onclick="selectColor(this)"></div>
+        <div class="color-swatch" style="background:var(--sticky4);" data-color="s4" onclick="selectColor(this)"></div>
+        <div class="color-swatch" style="background:var(--sticky5);" data-color="s5" onclick="selectColor(this)"></div>
+      </div>
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="closeModal()">Cancel</button>
+      <button class="btn-primary" onclick="applyCell()">Add to Grid</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  // ── State ──
+  const cells = Array.from({ length: 12 }, () => null);
+  let activeCellIndex = null;
+  let activeTab = 'photo';
+  let selectedColor = 's1';
+  let pendingFileData = null;
+
+  // ── Build Grid ──
+  function buildGrid() {
+    const grid = document.getElementById('grid');
+    grid.innerHTML = '';
+    cells.forEach((cell, i) => {
+      const el = document.createElement('div');
+      el.className = 'cell' + (cell ? ' has-content' : '');
+      el.dataset.index = i;
+
+      if (cell) {
+        // Controls
+        const controls = document.createElement('div');
+        controls.className = 'cell-controls';
+        const isImage = cell.type === 'image';
+        controls.innerHTML = `
+          ${isImage ? `<button class="cell-btn rotate" onclick="rotateCell(${i})" title="Rotate">↻</button>` : ''}
+          <button class="cell-btn edit" onclick="openModal(${i}, true)" title="Edit">✎</button>
+          <button class="cell-btn remove" onclick="removeCell(${i})" title="Remove">✕</button>
+        `;
+        el.appendChild(controls);
+
+        if (cell.type === 'image') {
+          const rotation = cell.rotation || 0;
+          const isRotated = rotation % 180 !== 0;
+          const img = document.createElement('img');
+          img.className = 'cell-image';
+          img.src = cell.src;
+          img.alt = '';
+          // When rotated 90/270, swap dimensions so image fills the cell properly
+          if (isRotated) {
+            img.style.transform = `rotate(${rotation}deg)`;
+            img.style.width = '100%';
+            img.style.height = '100%';
+            img.style.objectFit = 'contain';
+            // Wrap in a container that handles the dimension swap
+            const wrap = document.createElement('div');
+            wrap.style.cssText = 'width:100%;height:100%;display:flex;align-items:center;justify-content:center;overflow:hidden;background:#f5f0eb;';
+            // Scale the image so its rotated form fits snugly
+            img.style.maxWidth = 'none';
+            img.style.width = '100%';
+            img.style.height = '100%';
+            img.style.objectFit = 'contain';
+            img.style.transform = `rotate(${rotation}deg) scale(${getRotationScale(img)})`;
+            img.onload = () => {
+              const cellEl = img.closest('.cell');
+              if (!cellEl) return;
+              const cw = cellEl.offsetWidth;
+              const ch = cellEl.offsetHeight;
+              const iw = img.naturalWidth;
+              const ih = img.naturalHeight;
+              // After 90° rotation, the image's visual width=ih, height=iw
+              // Scale so it fits inside cw x ch
+              const scale = Math.min(cw / ih, ch / iw);
+              img.style.transform = `rotate(${rotation}deg) scale(${scale})`;
+            };
+            wrap.appendChild(img);
+            el.appendChild(wrap);
+          } else {
+            img.style.transform = `rotate(${rotation}deg)`;
+            el.appendChild(img);
+          }
+        } else if (cell.type === 'quote') {
+          const sticky = document.createElement('div');
+          sticky.className = `cell-sticky ${cell.color}`;
+          sticky.innerHTML = `
+            <div class="sticky-tape"></div>
+            <p class="sticky-quote">${escapeHtml(cell.text)}</p>
+          `;
+          el.appendChild(sticky);
+        }
+      } else {
+        // Empty state
+        el.innerHTML = `
+          <div class="cell-empty-label">
+            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+              <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+            </svg>
+            <span>Add</span>
+          </div>
+        `;
+        el.addEventListener('click', () => openModal(i));
+      }
+
+      grid.appendChild(el);
+    });
+  }
+
+  function escapeHtml(str) {
+    return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  // ── Modal ──
+  function openModal(index, editing = false) {
+    activeCellIndex = index;
+    activeTab = 'photo';
+    pendingFileData = null;
+
+    // Reset
+    document.getElementById('fileInput').value = '';
+    document.getElementById('uploadPreview').style.display = 'none';
+    document.getElementById('linkInput').value = '';
+    document.getElementById('linkPreview').style.display = 'none';
+    document.getElementById('quoteInput').value = '';
+
+    // Pre-fill if editing
+    if (editing && cells[index]) {
+      const c = cells[index];
+      if (c.type === 'image') {
+        activeTab = c.src.startsWith('data:') ? 'photo' : 'link';
+        if (activeTab === 'link') {
+          document.getElementById('linkInput').value = c.src;
+          previewLink();
+        } else {
+          pendingFileData = c.src;
+          const prev = document.getElementById('uploadPreview');
+          prev.src = c.src;
+          prev.style.display = 'block';
+        }
+      } else {
+        activeTab = 'quote';
+        document.getElementById('quoteInput').value = c.text;
+        selectColorByName(c.color);
+      }
+    }
+
+    switchTab(activeTab);
+    document.getElementById('modalOverlay').classList.add('open');
+  }
+
+  function closeModal() {
+    document.getElementById('modalOverlay').classList.remove('open');
+    activeCellIndex = null;
+  }
+
+  function switchTab(tab) {
+    activeTab = tab;
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    document.querySelector(`.tab:nth-child(${tab==='photo'?1:tab==='link'?2:3})`).classList.add('active');
+    document.getElementById(`panel-${tab}`).classList.add('active');
+  }
+
+  // ── File upload ──
+  function handleFileSelect(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      pendingFileData = ev.target.result;
+      const prev = document.getElementById('uploadPreview');
+      prev.src = pendingFileData;
+      prev.style.display = 'block';
+    };
+    reader.readAsDataURL(file);
+  }
+
+  // ── Link preview ──
+  document.getElementById('linkInput').addEventListener('input', debounce(previewLink, 600));
+  function previewLink() {
+    const url = document.getElementById('linkInput').value.trim();
+    const prev = document.getElementById('linkPreview');
+    if (url) {
+      prev.src = url;
+      prev.style.display = 'block';
+      prev.onerror = () => { prev.style.display = 'none'; };
+    } else {
+      prev.style.display = 'none';
+    }
+  }
+
+  function debounce(fn, ms) {
+    let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); };
+  }
+
+  // ── Color ──
+  function selectColor(el) {
+    document.querySelectorAll('.color-swatch').forEach(s => s.classList.remove('selected'));
+    el.classList.add('selected');
+    selectedColor = el.dataset.color;
+  }
+  function selectColorByName(name) {
+    document.querySelectorAll('.color-swatch').forEach(s => {
+      s.classList.toggle('selected', s.dataset.color === name);
+    });
+    selectedColor = name;
+  }
+
+  // ── Apply ──
+  function applyCell() {
+    if (activeCellIndex === null) return;
+
+    if (activeTab === 'photo') {
+      if (!pendingFileData) { alert('Please select an image file.'); return; }
+      const existingRotation = (cells[activeCellIndex]?.type === 'image') ? (cells[activeCellIndex].rotation || 0) : 0;
+      cells[activeCellIndex] = { type: 'image', src: pendingFileData, rotation: existingRotation };
+    } else if (activeTab === 'link') {
+      const url = document.getElementById('linkInput').value.trim();
+      if (!url) { alert('Please enter an image URL.'); return; }
+      const existingRotation = (cells[activeCellIndex]?.type === 'image') ? (cells[activeCellIndex].rotation || 0) : 0;
+      cells[activeCellIndex] = { type: 'image', src: url, rotation: existingRotation };
+    } else {
+      const text = document.getElementById('quoteInput').value.trim();
+      if (!text) { alert('Please enter some text.'); return; }
+      cells[activeCellIndex] = { type: 'quote', text, color: selectedColor };
+    }
+
+    closeModal();
+    buildGrid();
+  }
+
+  // ── Rotate ──
+  function getRotationScale() { return 1; } // placeholder, real scale set via onload
+
+  function rotateCell(index) {
+    if (!cells[index] || cells[index].type !== 'image') return;
+    cells[index].rotation = ((cells[index].rotation || 0) + 90) % 360;
+    buildGrid();
+  }
+
+  // ── Remove ──
+  function removeCell(index) {
+    cells[index] = null;
+    buildGrid();
+  }
+
+  // ── Close modal on overlay click ──
+  document.getElementById('modalOverlay').addEventListener('click', (e) => {
+    if (e.target === document.getElementById('modalOverlay')) closeModal();
+  });
+
+  // ── Init ──
+  buildGrid();
+</script>
+</body>
+</html>
